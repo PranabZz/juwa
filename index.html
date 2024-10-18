@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slut Game Muji Jot ko </title>
+    <title>4x4 Slot Machine</title>
     <style>
         * {
             margin: 0;
@@ -19,6 +19,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 20px;
         }
 
         .container {
@@ -29,14 +30,16 @@
         }
 
         .slot-machine {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
             gap: 10px;
             margin: 20px 0;
+            position: relative;
         }
 
         .reel {
             width: 100px;
-            height: 120px;
+            height: 480px;
             background: #333;
             border-radius: 10px;
             overflow: hidden;
@@ -59,9 +62,66 @@
             border: 1px solid #555;
         }
 
+        .paylines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .payline {
+            position: absolute;
+            background: rgba(76, 175, 80, 0.3);
+            transition: opacity 0.3s;
+            opacity: 0;
+        }
+
+        .payline.active {
+            opacity: 1;
+        }
+
+        .horizontal {
+            width: 100%;
+            height: 120px;
+        }
+
+        .payline-row0 { top: 0; }
+        .payline-row1 { top: 120px; }
+        .payline-row2 { top: 240px; }
+        .payline-row3 { top: 360px; }
+
+        .diagonal {
+            width: 100%;
+            height: 480px;
+            clip-path: polygon(0 0, 100% 100%, 100% 75%, 0 -25%);
+            transform-origin: center;
+        }
+
+        .diagonal-reverse {
+            clip-path: polygon(0 100%, 100% 0, 100% -25%, 0 75%);
+        }
+
         .controls {
             text-align: center;
             margin-top: 20px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .paylines-info {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 14px;
+            color: #888;
+            line-height: 1.5;
         }
 
         button {
@@ -84,13 +144,6 @@
             background: #45a049;
         }
 
-        .stats {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            font-size: 18px;
-        }
-
         .message {
             text-align: center;
             margin-top: 15px;
@@ -110,7 +163,6 @@
     </style>
 </head>
 <body>
-   
     <div class="container">
         <div class="stats">
             <div>Balance: $<span id="balance">100</span></div>
@@ -141,20 +193,45 @@
                     <div class="symbol">7️⃣</div>
                 </div>
             </div>
+            <div class="reel" id="reel4">
+                <div class="symbols">
+                    <div class="symbol">🍒</div>
+                    <div class="symbol">🍋</div>
+                    <div class="symbol">⭐</div>
+                    <div class="symbol">7️⃣</div>
+                </div>
+            </div>
+            <div class="paylines">
+                <div class="payline horizontal payline-row0"></div>
+                <div class="payline horizontal payline-row1"></div>
+                <div class="payline horizontal payline-row2"></div>
+                <div class="payline horizontal payline-row3"></div>
+                <div class="payline diagonal"></div>
+                <div class="payline diagonal diagonal-reverse"></div>
+            </div>
         </div>
         <div class="controls">
             <button id="spinButton">SPIN ($10)</button>
         </div>
         <div class="message" id="message"></div>
+        <div class="paylines-info">
+            Match 4 symbols on any line to win!<br>
+            🍒: $20 | 🍋: $30 | 🍎: $40 | ⭐: $50 | 💎: $75 | 7️⃣: $100 | 🎰: $200 | 🌟: $500<br>
+            Win on horizontal lines or diagonals
+        </div>
     </div>
 
     <script>
-        const symbols = ['🍒', '🍋', '⭐', '7️⃣'];
+        const symbols = ['🍒', '🍋', '🍎', '⭐', '💎', '7️⃣', '🎰', '🌟'];
         const symbolValues = {
             '🍒': 20,
             '🍋': 30,
-            '⭐': 40,
-            '7️⃣': 100
+            '🍎': 40,
+            '⭐': 50,
+            '💎': 75,
+            '7️⃣': 100,
+            '🎰': 200,
+            '🌟': 500
         };
 
         let balance = 100;
@@ -167,7 +244,8 @@
         const reels = [
             document.querySelector('#reel1 .symbols'),
             document.querySelector('#reel2 .symbols'),
-            document.querySelector('#reel3 .symbols')
+            document.querySelector('#reel3 .symbols'),
+            document.querySelector('#reel4 .symbols')
         ];
 
         function monteCarloRandom() {
@@ -189,11 +267,62 @@
             balanceEl.textContent = balance;
         }
 
-        function checkWin(results) {
-            if (results[0] === results[1] && results[1] === results[2]) {
-                return symbolValues[results[0]];
+        function getSymbolsMatrix() {
+            const matrix = [];
+            for (let i = 0; i < 4; i++) {
+                const row = [];
+                for (let j = 0; j < 4; j++) {
+                    row.push(getRandomSymbol());
+                }
+                matrix.push(row);
             }
-            return 0;
+            return matrix;
+        }
+
+        function checkWinningLines(matrix) {
+            const winningLines = [];
+            let totalWin = 0;
+
+            // Check horizontal lines
+            for (let i = 0; i < 4; i++) {
+                if (matrix[i][0] === matrix[i][1] && 
+                    matrix[i][1] === matrix[i][2] && 
+                    matrix[i][2] === matrix[i][3]) {
+                    winningLines.push(`row${i}`);
+                    totalWin += symbolValues[matrix[i][0]];
+                }
+            }
+
+            // Check diagonal (top-left to bottom-right)
+            if (matrix[0][0] === matrix[1][1] && 
+                matrix[1][1] === matrix[2][2] && 
+                matrix[2][2] === matrix[3][3]) {
+                winningLines.push('diagonal');
+                totalWin += symbolValues[matrix[0][0]] * 1.5; // Bonus for diagonal
+            }
+
+            // Check diagonal (top-right to bottom-left)
+            if (matrix[0][3] === matrix[1][2] && 
+                matrix[1][2] === matrix[2][1] && 
+                matrix[2][1] === matrix[3][0]) {
+                winningLines.push('diagonal-reverse');
+                totalWin += symbolValues[matrix[0][3]] * 1.5; // Bonus for diagonal
+            }
+
+            return { winningLines, totalWin };
+        }
+
+        function showWinningLines(winningLines) {
+            const paylines = document.querySelectorAll('.payline');
+            paylines.forEach(line => line.classList.remove('active'));
+
+            winningLines.forEach(line => {
+                if (line.startsWith('row')) {
+                    document.querySelector(`.payline-${line}`).classList.add('active');
+                } else {
+                    document.querySelector(`.${line}`).classList.add('active');
+                }
+            });
         }
 
         function spinReel(reel, duration, symbols) {
@@ -223,26 +352,29 @@
             messageEl.textContent = '';
             updateBalance(-spinCost);
 
-            const results = [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()];
+            const matrix = getSymbolsMatrix();
             
             // Spin animations with different durations
             await Promise.all([
-                spinReel(reels[0], 1000, [results[0], ...symbols]),
-                spinReel(reels[1], 1500, [results[1], ...symbols]),
-                spinReel(reels[2], 2000, [results[2], ...symbols])
+                spinReel(reels[0], 1000, matrix.map(row => row[0])),
+                spinReel(reels[1], 1500, matrix.map(row => row[1])),
+                spinReel(reels[2], 2000, matrix.map(row => row[2])),
+                spinReel(reels[3], 2500, matrix.map(row => row[3]))
             ]);
 
-            const winAmount = checkWin(results);
+            const { winningLines, totalWin } = checkWinningLines(matrix);
             
-            if (winAmount > 0) {
-                messageEl.textContent = `Congratulations! You won $${winAmount}!`;
-                updateBalance(winAmount);
+            if (totalWin > 0) {
+                messageEl.textContent = `Congratulations! You won $${totalWin}!`;
+                updateBalance(totalWin);
+                showWinningLines(winningLines);
                 reels.forEach(reel => reel.parentElement.classList.add('win'));
                 setTimeout(() => {
                     reels.forEach(reel => reel.parentElement.classList.remove('win'));
                 }, 1500);
             } else {
                 messageEl.textContent = 'Try again!';
+                showWinningLines([]);
             }
 
             isSpinning = false;
